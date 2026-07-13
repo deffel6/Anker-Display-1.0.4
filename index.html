@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anker Solix Display – Web-Flasher</title>
+<meta name="description" content="ESP32-C3 Firmware für das Anker Solix Display direkt im Browser flashen.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+<style>
+:root{
+  --bg:#0a0a0a; --card:#161616; --line:#2a2a2a;
+  --txt:#ececec; --mut:#8a8a8a; --dim:#555;
+  --amber:#f0a500;              /* Akzent aus dem Setup-Portal der Firmware */
+  --pv:#ffd200;                 /* C_YELLOW  */
+  --ok:#00ff78;                 /* C_GREEN   */
+  --grid:#00aaff;               /* C_BLUE    */
+  --warn:#ff3c3c;               /* C_RED     */
+  --sans:'Space Grotesk',-apple-system,sans-serif;
+  --mono:'JetBrains Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+body{background:var(--bg);color:var(--txt);font-family:var(--sans);line-height:1.55;
+  display:flex;justify-content:center;padding:32px 20px 64px}
+.wrap{width:100%;max-width:680px}
+
+/* ── Kopf ─────────────────────────────────────────────── */
+header{text-align:center;margin-bottom:36px}
+.ver{display:inline-block;font-family:var(--mono);font-size:.78rem;letter-spacing:.08em;
+  color:var(--amber);border:1px solid var(--amber);border-radius:999px;
+  padding:4px 14px;margin-bottom:18px}
+h1{font-size:clamp(1.7rem,5vw,2.3rem);font-weight:700;letter-spacing:-.01em}
+h1 .sub{display:block;font-size:.5em;font-weight:500;color:var(--mut);
+  letter-spacing:.14em;text-transform:uppercase;margin-top:6px}
+
+/* ── Display-Replik ───────────────────────────────────── */
+.device{display:flex;justify-content:center;margin:34px 0 8px}
+.screen{width:240px;height:240px;border-radius:50%;background:#000;position:relative;
+  border:10px solid #1c1c1c;
+  box-shadow:0 0 0 1px #333,0 18px 50px -12px rgba(240,165,0,.28),inset 0 0 40px rgba(0,0,0,.9);
+  font-family:var(--mono);display:flex;flex-direction:column;align-items:center;
+  padding-top:26px;user-select:none}
+.scr-time{font-size:1.7rem;font-weight:600;color:#fff;line-height:1}
+.scr-date{font-size:.66rem;color:var(--dim);margin-top:4px}
+.scr-cols{display:flex;gap:26px;margin-top:16px;text-align:center}
+.scr-cols .lbl{font-size:.6rem;letter-spacing:.05em}
+.scr-cols .val{font-size:.95rem;font-weight:600;color:#fff;margin-top:2px}
+.scr-cols .unit{font-size:.6rem}
+.c-pv .lbl,.c-pv .unit{color:var(--pv)}
+.c-akku .lbl{color:var(--dim)}
+.c-akku .val{color:var(--ok);font-size:1.25rem}
+.c-grid .lbl,.c-grid .unit{color:var(--grid)}
+.scr-batt{margin-top:12px;display:flex;flex-direction:column;align-items:center}
+.batt-icon{width:38px;height:16px;border:2px solid var(--ok);border-radius:3px;position:relative}
+.batt-icon::after{content:'';position:absolute;right:-6px;top:3px;width:4px;height:6px;background:var(--ok);border-radius:1px}
+.batt-arrow{width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;
+  border-bottom:9px solid var(--ok);margin-bottom:3px;animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+.scr-flow{font-size:.62rem;color:var(--ok);margin-top:5px}
+.scr-flow b{color:#fff;font-size:.8rem;margin-left:5px}
+.caption{text-align:center;font-size:.8rem;color:var(--dim);margin-bottom:36px}
+
+/* ── Flash-Karte ──────────────────────────────────────── */
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;
+  padding:26px;margin-bottom:22px}
+.card h2{font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--amber);margin-bottom:16px;font-weight:700}
+.flash-row{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}
+esp-web-install-button::part(button){
+  background:var(--amber);color:#000;font-family:var(--sans);font-weight:700;
+  font-size:1.05rem;border:none;border-radius:12px;padding:16px 34px;cursor:pointer}
+esp-web-install-button::part(button):hover{background:#ffb81e}
+esp-web-install-button::part(button):focus-visible{outline:3px solid #fff;outline-offset:2px}
+.browser-note{font-size:.82rem;color:var(--mut)}
+.browser-note b{color:var(--txt)}
+.unsupported{color:var(--warn);font-size:.85rem}
+
+/* ── Listen / Schritte ────────────────────────────────── */
+ol.steps{list-style:none;counter-reset:s}
+ol.steps li{counter-increment:s;position:relative;padding:0 0 14px 42px;font-size:.92rem;color:var(--txt)}
+ol.steps li:last-child{padding-bottom:0}
+ol.steps li::before{content:counter(s);position:absolute;left:0;top:-1px;
+  width:26px;height:26px;border-radius:50%;border:1px solid var(--amber);color:var(--amber);
+  font-family:var(--mono);font-size:.78rem;display:flex;align-items:center;justify-content:center}
+ol.steps code{font-family:var(--mono);font-size:.85em;background:#000;border:1px solid var(--line);
+  border-radius:6px;padding:2px 7px;color:var(--pv)}
+.hint{font-size:.82rem;color:var(--mut);margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.hint b{color:var(--ok)}
+
+ul.chg{list-style:none}
+ul.chg li{padding:0 0 10px 22px;position:relative;font-size:.9rem;color:var(--txt)}
+ul.chg li:last-child{padding-bottom:0}
+ul.chg li::before{content:'+';position:absolute;left:0;color:var(--ok);font-family:var(--mono);font-weight:600}
+
+/* ── Hardware-Tabelle ─────────────────────────────────── */
+table{width:100%;border-collapse:collapse;font-size:.88rem}
+td{padding:9px 0;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td:first-child{color:var(--mut);width:38%;padding-right:14px}
+td:last-child{font-family:var(--mono);font-size:.82rem}
+
+footer{text-align:center;font-size:.8rem;color:var(--dim);margin-top:34px}
+footer a{color:var(--mut)}
+footer a:hover,footer a:focus-visible{color:var(--amber)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <span class="ver">Firmware 1.0.4</span>
+    <h1>Anker Solix Display
+      <span class="sub">ESP32-C3 · Web-Flasher</span>
+    </h1>
+  </header>
+
+  <!-- Replik des runden GC9A01A-Displays, Farben & Layout wie in der Firmware -->
+  <div class="device" aria-hidden="true">
+    <div class="screen">
+      <div class="scr-time" id="clock">14:32</div>
+      <div class="scr-date" id="date">13.07.2026</div>
+      <div class="scr-cols">
+        <div class="c-pv"><div class="lbl">PV</div><div class="val">618</div><div class="unit">W</div></div>
+        <div class="c-akku"><div class="lbl">AKKU</div><div class="val">84%</div></div>
+        <div class="c-grid"><div class="lbl">NETZ</div><div class="val">0</div><div class="unit">W</div></div>
+      </div>
+      <div class="scr-batt">
+        <div class="batt-arrow"></div>
+        <div class="batt-icon"></div>
+      </div>
+      <div class="scr-flow">EINGANG <b>412W</b></div>
+    </div>
+  </div>
+  <p class="caption">Live-Daten deiner Solarbank auf dem 1.28&Prime; Rund-Display &ndash; ganz ohne Home&nbsp;Assistant.</p>
+
+  <div class="card">
+    <h2>Flashen</h2>
+    <div class="flash-row">
+      <esp-web-install-button manifest="manifest.json">
+        <button slot="activate">&#9889; Firmware installieren</button>
+        <span slot="unsupported" class="unsupported">Dieser Browser unterst&uuml;tzt kein Web&nbsp;Serial &ndash; bitte Chrome oder Edge am Computer verwenden.</span>
+        <span slot="not-allowed" class="unsupported">Web&nbsp;Serial ist hier nicht erlaubt &ndash; Seite &uuml;ber HTTPS &ouml;ffnen.</span>
+      </esp-web-install-button>
+      <p class="browser-note">Board per USB anschlie&szlig;en, Button klicken, Port ausw&auml;hlen.<br>
+      Funktioniert mit <b>Chrome</b> und <b>Edge</b> (Desktop).</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Neu in 1.0.4</h2>
+    <ul class="chg">
+      <li>Passwort-Anzeige (Auge-Symbol) in allen Eingabeformularen</li>
+      <li>Falscher Anker-Login? Korrektur direkt im Browser &ndash; kein Neu-Flashen mehr n&ouml;tig</li>
+      <li>GPIO9-Reset entfernt (im Geh&auml;use ohnehin nicht zug&auml;nglich)</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>Ersteinrichtung</h2>
+    <ol class="steps">
+      <li>Nach dem Flashen startet das Display im Setup-Modus</li>
+      <li>Mit dem WLAN <code>Anker-Display-Setup</code> verbinden</li>
+      <li>Im Browser <code>192.168.4.1</code> &ouml;ffnen und WLAN- &amp; Anker-Zugangsdaten eingeben</li>
+      <li>Das Display zeigt eine IP-Adresse &ndash; diese im Heimnetz aufrufen und die Anlage ausw&auml;hlen</li>
+    </ol>
+    <p class="hint"><b>Login fehlgeschlagen?</b> Das Display zeigt dann eine IP-Adresse an &ndash; dort einfach die Zugangsdaten korrigieren. Neu flashen ist nicht n&ouml;tig.</p>
+  </div>
+
+  <div class="card">
+    <h2>Hardware</h2>
+    <table>
+      <tr><td>Board</td><td>ESP32-C3 (z.B. ESP32-2424S012)</td></tr>
+      <tr><td>Display</td><td>1.28&Prime; GC9A01A rund, 240&times;240</td></tr>
+      <tr><td>Datenquelle</td><td>Anker Solix Cloud API (EU)</td></tr>
+      <tr><td>Stromversorgung</td><td>USB-C, 5V</td></tr>
+    </table>
+  </div>
+
+  <footer>
+    <a href="https://github.com/deffel6/Anker-Display-1.0.4">Quellcode &amp; Firmware auf GitHub</a><br>
+    Basierend auf <a href="https://esphome.github.io/esp-web-tools/">ESP Web Tools</a>
+  </footer>
+
+</div>
+
+<script>
+// Uhr & Datum auf der Display-Replik live halten
+function tick(){
+  const n=new Date(),p=x=>String(x).padStart(2,'0');
+  document.getElementById('clock').textContent=p(n.getHours())+':'+p(n.getMinutes());
+  document.getElementById('date').textContent=p(n.getDate())+'.'+p(n.getMonth()+1)+'.'+n.getFullYear();
+}
+tick();setInterval(tick,15000);
+</script>
+</body>
+</html>
